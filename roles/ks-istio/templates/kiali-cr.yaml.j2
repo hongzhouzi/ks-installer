@@ -10,9 +10,9 @@ spec:
     strategy: "token"
   deployment:
     accessible_namespaces: [ "**" ]
-    image_name: "{{ kiali_repo }}"
+    image_name: "quay.io/kiali/kiali"
     image_pull_policy: "IfNotPresent"
-    image_version: "{{ kiali_tag }}"
+    image_version: "v1.48"
     namespace: "istio-system"
     service_type: "ClusterIP"
   external_services:

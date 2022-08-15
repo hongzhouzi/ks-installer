@@ -9,10 +9,6 @@
     - "jaeger"
     - "prometheus"
 
-- name: servicemesh | Unarchive istio files
-  shell: >
-    tar -zxf {{ kubesphere_dir }}/servicemesh/istio/istio-1.11.2-linux-amd64.tar.gz -C {{ kubesphere_dir }}/servicemesh/istio/
-
 - name: servicemesh | Grant privileges to ks-installer
   shell: >
     {{ bin_dir }}/kubectl get clusterrole ks-installer -o yaml > {{ kubesphere_dir }}/servicemesh/istio/clusterroles-all.yaml && \
@@ -41,7 +37,7 @@
     - { path: kiali, file: kiali-cr.yaml }
 
 - name: servicemesh | Checking istio old version
-  shell: kubectl -n istio-system get pods -lapp=istiod,istio.io/rev=1-6-10
+  shell: kubectl -n istio-system get pods -lapp=istiod,istio.io/rev=1-11-2
   register: istio_old_version_check
   failed_when: false
 
@@ -49,9 +45,20 @@
   when:
     istio_old_version_check.stdout.find('istiod') != -1
 
-- name: servicemesh | Installing istiod-1.11.2
+- name: servicemesh | Deploying istio-base
   shell: >
-    {{ kubesphere_dir }}/servicemesh/istio/istio-1.11.2/bin/istioctl install -f {{ kubesphere_dir }}/servicemesh/istio/istio-profile.yaml --set revision=1-11-2 -y
+    {{ bin_dir }}/helm upgrade --install istio-base-1.13.7 {{ kubesphere_dir }}/servicemesh/istio/base-1.13.7.tgz
+    --namespace istio-system
+  register: istio_result
+  failed_when: false
+  retries: 3
+  until: "'errors occurred during operation' not in istio_result.stderr"
+
+- name: servicemesh | Deploying istiod
+  shell: >
+    {{ bin_dir }}/helm upgrade --install istiod-1.13.7 {{ kubesphere_dir }}/servicemesh/istio/istiod-1.13.7.tgz
+    -f {{ kubesphere_dir }}/servicemesh/istio/istio-profile.yaml --set revision=1-13-7
+    --namespace istio-system
   register: istio_result
   failed_when: false
   retries: 3
@@ -62,10 +69,10 @@
     var: istio_result
 
 # when install istiod-1.11.2 successful 
-- name: servicemesh | Change istiod-1.11.2 injector to default
+- name: servicemesh | Change istiod-1-13-7 injector to default
   ignore_errors: true
   shell: >
-    {{ bin_dir }}/kubectl patch mutatingwebhookconfigurations istio-sidecar-injector-1-11-2 --type='json' -p='[{ "op": "remove", "path": "/webhooks/1/objectSelector/matchExpressions/1" }]'
+    {{ bin_dir }}/kubectl patch mutatingwebhookconfigurations istio-sidecar-injector-1-13-7 --type='json' -p='[{ "op": "remove", "path": "/webhooks/1/objectSelector/matchExpressions/1" }]'
   when: "'errors occurred during operation' not in istio_result.stderr"
 
 - import_tasks: jaeger-install.yaml
